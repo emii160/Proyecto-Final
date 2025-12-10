@@ -17,18 +17,12 @@ pipeline {
             steps {
                 bat 'docker-compose down || exit 0'
                 bat 'docker-compose up -d --build'
-
-                :: Esperar 5 segundos sin usar timeout
-                bat 'ping -n 6 127.0.0.1 > nul'
+                bat 'ping -n 6 127.0.0.1 > nul'   
             }
         }
 
         stage('Verify Environment') {
             steps {
-
-                :: Verificar que el contenedor esté listo
-                bat 'docker-compose exec devstack bash -lc "echo OK"'
-
                 bat 'docker-compose exec devstack ruby --version'
                 bat 'docker-compose exec devstack node -v'
                 bat 'docker-compose exec devstack python3 --version'
