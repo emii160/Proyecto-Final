@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  devstack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devstack_container
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    tty: true
+    stdin_open: true
