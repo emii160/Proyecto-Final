@@ -1,7 +1,6 @@
-version: "3.8"
-
 services:
   devstack:
+    container_name: proyectofinal-devstack
     build:
       context: .
       dockerfile: Dockerfile
