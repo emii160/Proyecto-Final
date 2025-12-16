@@ -1,5 +1,4 @@
 pipeline {
-
     agent any
 
     environment {
@@ -16,34 +15,43 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker-compose down || exit 0'
-                bat 'docker-compose up -d --build'
+                bat 'docker compose down || exit 0'
+                bat 'docker compose up -d --build'
                 bat 'ping -n 6 127.0.0.1 > nul'
             }
         }
 
         stage('Verify Environment') {
             steps {
-                bat 'docker-compose exec devstack bash -lc "echo OK"'
-                bat 'docker-compose exec devstack bash -lc "ruby --version"'
-                bat 'docker-compose exec devstack bash -lc "node -v"'
-                bat 'docker-compose exec devstack bash -lc "python3 --version"'
-                bat 'docker-compose exec devstack bash -lc "jmeter -v"'
-                bat 'docker-compose exec devstack bash -lc "sonar-scanner --version"'
+                bat 'docker compose exec devstack bash -lc "ruby --version"'
+                bat 'docker compose exec devstack bash -lc "node -v"'
+                bat 'docker compose exec devstack bash -lc "python3 --version"'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('ConexionJenkins') {
-                    bat 'docker-compose exec devstack bash -lc "sonar-scanner -Dsonar.projectKey=ProyectoFinal -Dsonar.sources=/workspace -Dsonar.host.url=%SONAR_HOST_URL% -Dsonar.login=%SONAR_AUTH_TOKEN%"'
+                    bat '''
+                    docker compose exec devstack bash -lc "
+                        sonar-scanner ^
+                        -Dsonar.projectKey=ProyectoFinal ^
+                        -Dsonar.sources=/workspace ^
+                        -Dsonar.host.url=%SONAR_HOST_URL% ^
+                        -Dsonar.login=%SONAR_AUTH_TOKEN%
+                    "
+                    '''
                 }
             }
         }
 
         stage('Run JMeter') {
             steps {
-                bat 'docker-compose exec devstack bash -lc "jmeter -n -t tests/test-plan.jmx -l results/result.jtl"'
+                bat '''
+                docker compose exec devstack bash -lc "
+                    jmeter -n -t tests/test-plan.jmx -l results/result.jtl
+                "
+                '''
             }
         }
     }
