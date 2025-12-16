@@ -36,28 +36,14 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('ConexionJenkins') {
-                    bat '''
-                    docker-compose exec devstack bash -lc "
-                        sonar-scanner \
-                          -Dsonar.projectKey=ProyectoFinal \
-                          -Dsonar.sources=/workspace \
-                          -Dsonar.host.url=%SONAR_HOST_URL% \
-                          -Dsonar.login=%SONAR_AUTH_TOKEN%
-                    "
-                    '''
+                    bat 'docker-compose exec devstack bash -lc "sonar-scanner -Dsonar.projectKey=ProyectoFinal -Dsonar.sources=/workspace -Dsonar.host.url=%SONAR_HOST_URL% -Dsonar.login=%SONAR_AUTH_TOKEN%"'
                 }
             }
         }
 
         stage('Run JMeter') {
             steps {
-                bat '''
-                docker-compose exec devstack bash -lc "
-                    jmeter -n \
-                      -t tests/test-plan.jmx \
-                      -l results/result.jtl
-                "
-                '''
+                bat 'docker-compose exec devstack bash -lc "jmeter -n -t tests/test-plan.jmx -l results/result.jtl"'
             }
         }
     }
