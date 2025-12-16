@@ -80,5 +80,4 @@ WORKDIR /workspace
 
 SHELL ["/bin/bash","-lc"]
 
-CMD ["/bin/bash"]
- 
+CMD ["/bin/bash"]s
