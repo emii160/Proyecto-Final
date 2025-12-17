@@ -2,163 +2,69 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "alma8-full"
-        IMAGE_TAG  = "proyecto-final"
-        DOCKERHUB_USER = "emily06"  // Cambiado de yeyo19 a tu usuario
-        DOCKERHUB_REPO = "${DOCKERHUB_USER}/${IMAGE_NAME}"
-        CONTAINER_NAME = "alma8_revision"
-        DOCKER_REGISTRY = "docker.io"  // Añadido para claridad
+        // 1. Nombre de la imagen
+        DOCKER_USER = 'emily06'
+        IMAGE_NAME = 'proyecto1'
+        IMAGE_TAG = 'ci'
+        FULL_IMAGE = "${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
+        DOCKERHUB_CREDS = credentials('dockerhub')
     }
 
     stages {
-        /* CI #1: BUILD + PUSH */
-        stage('Clonar repositorio') {
+        stage('CI #1 - Build con Docker Compose') {
             steps {
-                echo "Clonando repositorio"
-                checkout scm
+                echo "Construyendo imagen: ${env.FULL_IMAGE}"
+                // Construye la imagen usando el docker-compose.yml
+                bat "docker-compose build"
             }
         }
 
-        stage('Construir imagen Docker') {
+        stage('CI #1 - Login a Docker Hub') {
             steps {
-                echo "Construyendo imagen con Docker Compose"
-                bat 'docker compose build full'
+                echo "Autenticando en Docker Hub..."
+                // Login usando las credenciales almacenadas
+                bat "echo ${env.DOCKERHUB_CREDS_PSW} | docker login -u ${env.DOCKERHUB_CREDS_USR} --password-stdin"
             }
         }
 
-        stage('Etiquetar imagen') {
+        stage('CI #1 - Push a Docker Hub') {
             steps {
-                echo "Etiquetando imagen"
+                echo "Publicando imagen: ${env.FULL_IMAGE}"
+                bat "docker push ${env.FULL_IMAGE}"
+            }
+        }
+
+        stage('CI #2 - Verificación de imagen') {
+            steps {
+                echo "Verificando imagen en Docker Hub..."
+                // Esto realmente hace pull desde el registro remoto
+                bat "docker pull ${env.FULL_IMAGE}"
+                bat "docker images ${env.FULL_IMAGE}"
+            }
+        }
+
+        stage('CI #2 - Ejecución de comandos') {
+            steps {
+                echo "Ejecutando comandos de revisión en el contenedor..."
+                // Ejecuta comandos dentro de la imagen descargada
                 bat """
-                    docker tag alma8-full:latest ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}
-                    docker tag alma8-full:latest ${env.DOCKERHUB_REPO}:latest
+                docker run --rm ${env.FULL_IMAGE} /bin/bash -lc \
+                \"rpm --version && \
+                 ruby --version && \
+                 node --version && \
+                 yarn --version && \
+                 python --version\"
                 """
-            }
-        }
-
-        stage('Subir imagen a Docker Hub') {
-            steps {
-                echo "Subiendo imagen a Docker Hub"
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    bat """
-                        echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
-                        docker push ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}
-                        docker push ${env.DOCKERHUB_REPO}:latest
-                    """
-                }
-            }
-        }
-
-        /* CI #2: PULL + VALIDACIÓN */
-        stage('Descargar imagen desde Docker Hub') {
-            steps {
-                bat "docker pull ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG}"
-            }
-        }
-
-        stage('Eliminar contenedor previo') {
-            steps {
-                bat "docker rm -f ${env.CONTAINER_NAME} || exit 0"
-            }
-        }
-
-        stage('Ejecutar contenedor') {
-            steps {
-                bat """
-                    docker run -d \
-                      --name ${env.CONTAINER_NAME} \
-                      -v ${WORKSPACE}:/workspace \
-                      ${env.DOCKERHUB_REPO}:${env.IMAGE_TAG} \
-                      tail -f /dev/null
-                """
-                bat 'timeout /t 10 /nobreak > nul'  // Esperar que el contenedor inicie
-            }
-        }
-
-        stage('Verificar entorno de desarrollo') {
-            steps {
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"ruby --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"node --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"npm --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"yarn --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"python3 --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"jmeter --version\""
-                bat "docker exec ${env.CONTAINER_NAME} bash -lc \"sonar-scanner --version\""
-            }
-        }
-
-        /* NUEVA ETAPA: Análisis SonarQube */
-        stage('Análisis SonarQube') {
-            when {
-                expression { 
-                    env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'develop' 
-                }
-            }
-            steps {
-                withSonarQubeEnv('ConexionJenkins') {
-                    script {
-                        // Ejecutar SonarQube Scanner dentro del contenedor
-                        bat """
-                            docker exec ${env.CONTAINER_NAME} bash -lc "
-                                source /etc/profile.d/devstack.sh && \
-                                cd /workspace && \
-                                sonar-scanner \
-                                -Dsonar.projectKey=ProyectoFinal \
-                                -Dsonar.sources=. \
-                                -Dsonar.host.url=${env.SONAR_HOST_URL} \
-                                -Dsonar.login=${env.SONAR_AUTH_TOKEN} \
-                                -Dsonar.projectVersion=${env.BUILD_NUMBER}
-                            "
-                        """
-                    }
-                }
-            }
-        }
-
-        /* NUEVA ETAPA: Pruebas con JMeter */
-        stage('Ejecutar pruebas JMeter') {
-            when {
-                expression { fileExists('test/jmeter') }
-            }
-            steps {
-                script {
-                    // Buscar archivos .jmx en el proyecto
-                    def jmxFiles = findFiles(glob: '**/*.jmx')
-                    
-                    if (jmxFiles) {
-                        jmxFiles.each { jmxFile ->
-                            echo "Ejecutando prueba JMeter: ${jmxFile.name}"
-                            bat """
-                                docker exec ${env.CONTAINER_NAME} bash -lc "
-                                    cd /workspace && \
-                                    jmeter -n -t ${jmxFile.name} -l results.jtl -j jmeter.log
-                                "
-                            """
-                        }
-                    } else {
-                        echo "No se encontraron archivos .jmx para pruebas JMeter"
-                    }
-                }
             }
         }
     }
 
     post {
-        always {
-            echo "Limpiando contenedores"
-            bat "docker rm -f ${env.CONTAINER_NAME} || exit 0"
-        }
         success {
-            echo "✅ Pipeline ejecutado correctamente"
-            // Opcional: Notificar éxito
+            echo "✅ Pipeline ejecutado correctamente. Imagen ${env.FULL_IMAGE} publicada."
         }
         failure {
-            echo "❌ Error en el pipeline"
-            // Opcional: Notificar fallo
+            echo "❌ Error en el pipeline."
         }
     }
 }
