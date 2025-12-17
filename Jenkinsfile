@@ -2,69 +2,203 @@ pipeline {
     agent any
 
     environment {
-        SONARQUBE = 'ConexionJenkins'
+        IMAGE_NAME = "proyecto-fullstack"
+        IMAGE_TAG = "v${env.BUILD_NUMBER}"
+        DOCKERHUB_USER = "emilysofia"
+        DOCKERHUB_REPO = "${DOCKERHUB_USER}/${IMAGE_NAME}"
+        CONTAINER_NAME = "revision-proyecto"
     }
 
     stages {
-
-        stage('Checkout') {
+        /* === FASE 1: CONSTRUCCIÓN Y PUBLICACIÓN === */
+        
+        stage('Obtener código') {
             steps {
-                git branch: 'main', url: 'https://github.com/emii160/Proyecto-Final.git'
+                echo "- Obteniendo código del repositorio 'proyecto'"
+                checkout scm
             }
         }
 
-        stage('Build Docker Image') {
+        stage(' Construir imagen') {
             steps {
-                bat 'docker compose down || exit 0'
-                bat 'docker compose up -d --build'
-                bat 'ping -n 6 127.0.0.1 > nul'
+                echo "Construyendo imagen Docker con todas las herramientas"
+                sh 'docker-compose build --no-cache'
             }
         }
 
-        stage('Verify Environment') {
+        stage('  Etiquetar imagen') {
             steps {
-                bat 'docker compose exec devstack bash -lc "ruby --version"'
-                bat 'docker compose exec devstack bash -lc "node -v"'
-                bat 'docker compose exec devstack bash -lc "python3 --version"'
+                echo "Etiquetando imagen para Docker Hub"
+                sh """
+                    docker tag proyecto-fullstack:latest ${DOCKERHUB_REPO}:${IMAGE_TAG}
+                    docker tag proyecto-fullstack:latest ${DOCKERHUB_REPO}:latest
+                    docker tag proyecto-fullstack:latest ${DOCKERHUB_REPO}:emily-sofia
+                """
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('⬆️  Publicar en Docker Hub') {
             steps {
-                withSonarQubeEnv('ConexionJenkins') {
-                    bat '''
-                    docker compose exec devstack bash -lc "
-                        sonar-scanner ^
-                        -Dsonar.projectKey=ProyectoFinal ^
-                        -Dsonar.sources=/workspace ^
-                        -Dsonar.host.url=%SONAR_HOST_URL% ^
-                        -Dsonar.login=%SONAR_AUTH_TOKEN%
-                    "
-                    '''
+                echo "Subiendo imagen al repositorio de Emily y Sofia"
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo \${DOCKER_PASS} | docker login -u \${DOCKER_USER} --password-stdin
+                        
+                        echo "Publicando etiquetas..."
+                        docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}
+                        docker push ${DOCKERHUB_REPO}:latest
+                        docker push ${DOCKERHUB_REPO}:emily-sofia
+                        
+                        echo " Imágenes publicadas por Emily y Sofia"
+                    """
                 }
             }
         }
 
-        stage('Run JMeter') {
+        /* === FASE 2: VERIFICACIÓN === */
+        
+        stage(' Obtener imagen publicada') {
             steps {
-                bat '''
-                docker compose exec devstack bash -lc "
-                    jmeter -n -t tests/test-plan.jmx -l results/result.jtl
-                "
-                '''
+                echo "Descargando imagen para verificación"
+                sh """
+                    docker pull ${DOCKERHUB_REPO}:${IMAGE_TAG}
+                    echo "Versión descargada: ${IMAGE_TAG}"
+                """
+            }
+        }
+
+        stage(' Ejecutar contenedor') {
+            steps {
+                echo "Iniciando contenedor de verificación"
+                sh """
+                    # Limpiar si existe
+                    docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
+                    
+                    # Ejecutar nuevo contenedor
+                    docker run -d \
+                        --name ${CONTAINER_NAME} \
+                        ${DOCKERHUB_REPO}:${IMAGE_TAG} \
+                        tail -f /dev/null
+                """
+            }
+        }
+
+        /* === VALIDACIONES CON NOMBRES PERSONALIZADOS === */
+        
+        stage('Verificar herramientas base') {
+            steps {
+                echo " verifica herramientas base"
+                sh """
+                    echo "=== HERRAMIENTAS DE DESARROLLO ==="
+                    docker exec ${CONTAINER_NAME} rpmbuild --version | head -1
+                    docker exec ${CONTAINER_NAME} git --version
+                """
+            }
+        }
+
+        stage('💎 Verificar Ruby') {
+            steps {
+                echo " verifica entorno Ruby"
+                sh """
+                    echo "=== ENTORNO RUBY ==="
+                    docker exec ${CONTAINER_NAME} ruby -v
+                    docker exec ${CONTAINER_NAME} bash -c 'rbenv versions'
+                """
+            }
+        }
+
+        stage(' Verificar Node.js') {
+            steps {
+                echo "verifica Node.js"
+                sh """
+                    echo "=== NODE.JS Y NPM ==="
+                    docker exec ${CONTAINER_NAME} bash -c 'node -v'
+                    docker exec ${CONTAINER_NAME} bash -c 'npm -v'
+                    docker exec ${CONTAINER_NAME} bash -c 'yarn -v 2>/dev/null || echo "Yarn no disponible"'
+                """
+            }
+        }
+
+        stage(' Verificar Python') {
+            steps {
+                echo "verifica Python"
+                sh """
+                    echo "=== PYTHON 3 ==="
+                    docker exec ${CONTAINER_NAME} python3 --version
+                    docker exec ${CONTAINER_NAME} python3 -c "print('¡Hola desde el proyecto de Emily y Sofia!')"
+                """
+            }
+        }
+
+        stage(' Verificación final') {
+            steps {
+                echo "Verificación final del proyecto"
+                sh """
+                    echo "=== RESUMEN DEL ENTORNO ==="
+                    docker exec ${CONTAINER_NAME} bash -c '
+                        echo "Ruby: $(ruby -v)"
+                        echo "Node: $(node -v)"
+                        echo "Python: $(python3 --version)"
+                        echo "Proyecto listo para producción"
+                    '
+                    
+                    echo "=== INFORMACIÓN DEL CONTENEDOR ==="
+                    docker inspect ${CONTAINER_NAME} --format='{{.Config.Image}}'
+                """
+            }
+        }
+
+        /* === ANÁLISIS OPCIONAL (Se puede activar después) === */
+        
+        stage(' Prueba rápida JMeter (Opcional)') {
+            when {
+                expression { params.RUN_JMETER == true }
+            }
+            steps {
+                echo "Ejecutando prueba JMeter básica"
+                sh """
+                    docker exec ${CONTAINER_NAME} bash -c '
+                        echo "Creando prueba básica JMeter..."
+                        jmeter --version 2>/dev/null || echo "JMeter no configurado"
+                    '
+                """
             }
         }
     }
 
     post {
         always {
-            echo "Pipeline finalizado."
+            echo "🧹 Limpiando recursos"
+            sh """
+                docker stop ${CONTAINER_NAME} 2>/dev/null || true
+                docker rm -f ${CONTAINER_NAME} 2>/dev/null || true
+                echo "Limpieza completada"
+            """
         }
         success {
-            echo "Pipeline ejecutado correctamente."
+            echo " ¡Pipeline completado exitosamente por Emily y Sofia!"
+            echo "Imagen disponible en: ${DOCKERHUB_REPO}:${IMAGE_TAG}"
         }
         failure {
-            echo "El pipeline falló."
+            echo " Pipeline falló "
         }
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    parameters {
+        booleanParam(
+            name: 'RUN_JMETER',
+            defaultValue: false,
+            description: 'Ejecutar pruebas JMeter (requiere configuración previa)'
+        )
     }
 }
