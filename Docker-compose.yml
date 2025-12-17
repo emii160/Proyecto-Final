@@ -1,12 +1,47 @@
 version: "3.8"
 
 services:
-  devstack:
-    build: .
-    image: proyectofinal-devstack:latest
-    container_name: devstack-container
+  rpms:
+    build:
+      context: ./imagen1-rpms
+      dockerfile: Dockerfile
+    image: alma8-rpms:1.0
+    container_name: rpms_modular
     tty: true
     stdin_open: true
-    working_dir: /workspace
-    # Solo mantiene el contenedor vivo para ejecutar comandos
-    command: ["tail", "-f", "/dev/null"]
+
+  ruby:
+    build:
+      context: ./imagen2-ruby-rbenv
+      dockerfile: Dockerfile
+    image: alma8-ruby-rbenv:1.0
+    container_name: ruby_modular
+    tty: true
+    stdin_open: true
+
+  node:
+    build:
+      context: ./imagen_3
+      dockerfile: Dockerfile
+    image: alma8-node-yarn:1.0
+    container_name: node_yarn
+    tty: true
+    stdin_open: true
+
+  python:
+    build:
+      context: ./imagen_4
+      dockerfile: Dockerfile
+    image: alma8-python-pyenv:1.0
+    container_name: python_env
+    tty: true
+    stdin_open: true
+
+  full:
+    build:
+      context: ./imagen_full
+      dockerfile: Dockerfile
+    image: alma8-full:1.0
+    container_name: alma8_full
+    tty: true
+    stdin_open: true
