@@ -1,47 +1,16 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  rpms:
+  ci-image:
+    image: emii160/proyecto1-ci:latest
     build:
-      context: ./imagen1-rpms
+      context: .
       dockerfile: Dockerfile
-    image: alma8-rpms:1.0
-    container_name: rpms_modular
-    tty: true
-    stdin_open: true
-
-  ruby:
-    build:
-      context: ./imagen2-ruby-rbenv
-      dockerfile: Dockerfile
-    image: alma8-ruby-rbenv:1.0
-    container_name: ruby_modular
-    tty: true
-    stdin_open: true
-
-  node:
-    build:
-      context: ./imagen_3
-      dockerfile: Dockerfile
-    image: alma8-node-yarn:1.0
-    container_name: node_yarn
-    tty: true
-    stdin_open: true
-
-  python:
-    build:
-      context: ./imagen_4
-      dockerfile: Dockerfile
-    image: alma8-python-pyenv:1.0
-    container_name: python_env
-    tty: true
-    stdin_open: true
-
-  full:
-    build:
-      context: ./imagen_full
-      dockerfile: Dockerfile
-    image: alma8-full:1.0
-    container_name: alma8_full
-    tty: true
-    stdin_open: true
+    container_name: proyecto1_ci_build
+    environment:
+      - RBENV_ROOT=/usr/local/rbenv
+      - NVM_DIR=/usr/local/nvm
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: bash -lc "ruby -v && node -v && python3 --version && jmeter --version && sonar-scanner --version"
