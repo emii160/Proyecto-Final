@@ -2,19 +2,20 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "proyectofinal-devstack"
-        IMAGE_TAG = "build-${env.BUILD_NUMBER}"
-        DOCKERHUB_USER = "emilysofia-project"
+        IMAGE_NAME = "alma8-full"
+        IMAGE_TAG  = "proyecto-final"
+        DOCKERHUB_USER = "yeyo19"
         DOCKERHUB_REPO = "${DOCKERHUB_USER}/${IMAGE_NAME}"
-        CONTAINER_NAME = "proyecto-test"
+        CONTAINER_NAME = "alma8_revision"
     }
 
     stages {
-        /* === FASE 1: CONSTRUCCIÓN Y PUBLICACIÓN === */
-        
+
+        /*CI #1: BUILD + PUSH*/
+
         stage('Clonar repositorio') {
             steps {
-                echo "Proyecto de Emily y Sofia"
+                echo "Clonando repositorio"
                 checkout scm
             }
         }
@@ -22,23 +23,20 @@ pipeline {
         stage('Construir imagen Docker') {
             steps {
                 echo "Construyendo imagen con Docker Compose"
-                bat 'docker compose down || exit 0'
-                bat 'docker compose up -d --build'
-                bat 'ping -n 6 127.0.0.1 >nul'
+                bat 'docker compose build full'
             }
         }
 
         stage('Etiquetar imagen') {
             steps {
-                echo "Etiquetando imagen para Docker Hub"
+                echo "Etiquetando imagen"
                 bat """
-                    docker tag proyectofinal-devstack:latest %DOCKERHUB_REPO%:%IMAGE_TAG%
-                    docker tag proyectofinal-devstack:latest %DOCKERHUB_REPO%:emily-sofia
+                    docker tag alma8-full:1.0 %DOCKERHUB_REPO%:%IMAGE_TAG%
                 """
             }
         }
 
-        stage('Subir a Docker Hub') {
+        stage('Subir imagen a Docker Hub') {
             steps {
                 echo "Subiendo imagen a Docker Hub"
                 withCredentials([usernamePassword(
@@ -49,118 +47,75 @@ pipeline {
                     bat """
                         echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin
                         docker push %DOCKERHUB_REPO%:%IMAGE_TAG%
-                        docker push %DOCKERHUB_REPO%:emily-sofia
                     """
                 }
             }
         }
 
-        /* === FASE 2: VALIDACIÓN Y PRUEBAS === */
-        
-        stage('Descargar imagen') {
+        /*CI #2: PULL + VALIDACIÓN*/
+
+        stage('Descargar imagen desde Docker Hub') {
             steps {
-                echo "Descargando imagen desde Docker Hub"
                 bat 'docker pull %DOCKERHUB_REPO%:%IMAGE_TAG%'
             }
         }
 
-        stage('Ejecutar contenedor de prueba') {
+        stage('Eliminar contenedor previo') {
             steps {
-                echo "Ejecutando contenedor para validación"
+                bat 'docker rm -f %CONTAINER_NAME% || exit 0'
+            }
+        }
+
+        stage('Ejecutar contenedor') {
+            steps {
                 bat """
-                    docker rm -f %CONTAINER_NAME% || exit 0
                     docker run -d --name %CONTAINER_NAME% %DOCKERHUB_REPO%:%IMAGE_TAG% tail -f /dev/null
-                    ping -n 5 127.0.0.1 >nul
                 """
             }
         }
 
-        stage('Verificar herramientas RPM') {
+        stage('Verificar versión de RPM') {
             steps {
-                echo "Validando herramientas de construcción"
-                bat '''
-                    echo === HERRAMIENTAS RPM ===
-                    docker exec %CONTAINER_NAME% rpm --version
-                    docker exec %CONTAINER_NAME% rpmbuild --version 2>nul || echo "rpmbuild no disponible"
-                '''
+                bat 'docker exec %CONTAINER_NAME% rpmbuild --version'
             }
         }
 
-        stage('Verificar Ruby y rbenv') {
+        stage('Verificar versión de Ruby') {
             steps {
-                echo "Validando entorno Ruby"
-                bat '''
-                    echo === RUBY Y RBENV ===
-                    docker exec %CONTAINER_NAME% ruby --version
-                    docker exec %CONTAINER_NAME% bash -lc "rbenv versions"
-                    docker exec %CONTAINER_NAME% gem --version
-                '''
+                bat 'docker exec %CONTAINER_NAME% ruby -v'
             }
         }
 
-        stage('Verificar Node.js y npm') {
+        stage('Verificar versiones de Node.js') {
             steps {
-                echo "Validando Node.js"
-                bat '''
-                    echo === NODE.JS ===
-                    docker exec %CONTAINER_NAME% bash -lc "node --version"
-                    docker exec %CONTAINER_NAME% bash -lc "npm --version"
-                    docker exec %CONTAINER_NAME% bash -lc "yarn --version 2>/dev/null || echo 'yarn no instalado'"
-                '''
+                bat 'docker exec %CONTAINER_NAME% bash -lc "node -v"'
+                bat 'docker exec %CONTAINER_NAME% bash -lc "npm -v"'
+                bat 'docker exec %CONTAINER_NAME% bash -lc "yarn -v"'
             }
         }
 
-        stage('Verificar Python') {
+        stage('Verificar versión de Python') {
             steps {
-                echo "Validando Python"
-                bat '''
-                    echo === PYTHON ===
-                    docker exec %CONTAINER_NAME% python3 --version
-                    docker exec %CONTAINER_NAME% bash -lc "python3 -m pip --version"
-                '''
+                bat 'docker exec %CONTAINER_NAME% python --version'
             }
         }
 
-        stage('Prueba de ejecución') {
+        stage('Hola Mundo desde Python') {
             steps {
-                echo "Ejecutando prueba final"
-                bat '''
-                    echo === PRUEBA FINAL ===
-                    docker exec %CONTAINER_NAME% python3 -c "print('¡Hola desde el proyecto de Emily y Sofia!')"
-                    docker exec %CONTAINER_NAME% bash -lc "echo ' Todas las herramientas funcionan correctamente'"
-                '''
-            }
-        }
-
-        stage('Verificación de imagen') {
-            steps {
-                echo "Verificando detalles de la imagen"
-                bat """
-                    echo === INFORMACIÓN DE LA IMAGEN ===
-                    docker images | findstr "%DOCKERHUB_REPO%"
-                    docker inspect %CONTAINER_NAME% --format="{{.Config.Image}}"
-                    
-                    echo === RESUMEN ===
-                    echo "Imagen: %DOCKERHUB_REPO%:%IMAGE_TAG%"
-                    echo "Build: %BUILD_NUMBER%"
-                    echo "Estado: VALIDACIÓN EXITOSA"
-                """
+                bat 'docker exec %CONTAINER_NAME% python -c "print(\'Hola Mundo\')"'
             }
         }
     }
 
     post {
         always {
-            echo "Realizando limpieza"
             bat 'docker rm -f %CONTAINER_NAME% || exit 0'
-            bat 'docker compose down || exit 0'
         }
         success {
-            echo " Pipeline ejecutado correctamente por Emily y Sofia"
-            echo " Imagen disponible en: ${DOCKERHUB_REPO}:${IMAGE_TAG}"
+            echo "Pipeline ejecutado correctamente"
         }
         failure {
-            echo " El pipeline falló"
+            echo "Error en el pipeline"
         }
     }
 }
