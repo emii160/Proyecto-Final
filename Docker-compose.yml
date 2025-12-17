@@ -1,65 +1,12 @@
 version: "3.8"
 
 services:
-  # Servicio único que reemplaza TODAS las imágenes anteriores
-  # Este es equivalente a "full" pero con tu Dockerfile consolidado
-  proyecto-full:
+  devstack:
     build: .
-    image: proyecto-emilysofia:1.0
-    container_name: proyecto_emily_sofia
+    image: proyectofinal-devstack:latest
+    container_name: devstack-container
     tty: true
     stdin_open: true
     working_dir: /workspace
-    environment:
-      - PROYECTO=EmilySofia
-      - VERSION=1.0
-    # El command se hereda del Dockerfile (tail -f /dev/null para mantener vivo)
-    # No necesita volumes a menos que tengas código para montar
-
-  # Servicio de validación rápida - Similar a ejecutar comandos de verificación
-  validacion-herramientas:
-    image: proyecto-emilysofia:1.0
-    container_name: validacion_tools
-    command: >
-      /bin/bash -c "
-      echo '=== VALIDACIÓN DE HERRAMIENTAS CONSOLIDADAS ===';
-      echo '';
-      echo '1. Herramientas RPM (de imagen1):';
-      rpmbuild --version;
-      rpm --version;
-      echo '';
-      echo '2. Ruby y rbenv (de imagen2):';
-      ruby -v;
-      rbenv versions;
-      echo '';
-      echo '3. Node.js, npm, yarn (de imagen3):';
-      node -v;
-      npm -v;
-      yarn -v;
-      echo '';
-      echo '4. Python y entorno (de imagen4):';
-      python3 --version;
-      python3 -m pip --version;
-      echo '';
-      echo 'Proyecto Emily y Sofia - Todas las herramientas funcionan';
-      echo ' Imagen consolidada: proyecto-emilysofia:1.0';
-      "
-    depends_on:
-      - proyecto-full
-
-  # Servicio para pruebas JMeter (opcional)
-  pruebas-jmeter:
-    image: proyecto-emilysofia:1.0
-    container_name: pruebas_jmeter
-    working_dir: /workspace/jmeter
-    command: >
-      /bin/bash -c "
-      echo '=== CONFIGURANDO JMETER ===';
-      jmeter --version 2>/dev/null || echo 'JMeter no instalado, instalando...';
-      echo 'JMeter listo para pruebas de carga';
-      echo 'Ejecutar: jmeter -n -t test.jmx -l resultados.jtl';
-      tail -f /dev/null
-      "
-    depends_on:
-      - proyecto-full
- 
+    # Solo mantiene el contenedor vivo para ejecutar comandos
+    command: ["tail", "-f", "/dev/null"]
