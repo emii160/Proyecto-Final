@@ -1,16 +1,19 @@
 version: "3.9"
 
 services:
-  ci-image:
-    image: emii160/proyecto1-ci:latest
+  full:
+    image: emily06/alma8-full:proyecto-final
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: proyecto1_ci_build
+    container_name: alma8_revision
     environment:
       - RBENV_ROOT=/usr/local/rbenv
       - NVM_DIR=/usr/local/nvm
     volumes:
       - .:/workspace
     working_dir: /workspace
-    command: bash -lc "ruby -v && node -v && python3 --version && jmeter --version && sonar-scanner --version"
+    command: tail -f /dev/null 
+    profiles:
+      - sonarqube
+      - jmeter
