@@ -1,11 +1,40 @@
+version: "3.8"
+
 services:
-  devstack:
-    container_name: proyectofinal-devstack
-    build:
-      context: .
-      dockerfile: Dockerfile
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
+  # Servicio único que reemplaza las 5 imágenes originales
+  fullstack:
+    build: .
+    image: emilysofia/proyecto-fullstack:latest
+    container_name: proyecto-full
     tty: true
     stdin_open: true
+    working_dir: /workspace
+    # Para desarrollo, montar el código local
+    volumes:
+      - .:/workspace
+    # Los puertos que podrían necesitar las aplicaciones
+    ports:
+      - "8080:8080"
+    environment:
+      - PROYECTO_OWNERS=Emily_Sofia
+      - BUILD_DATE=${BUILD_DATE}
+    command: /bin/bash -c "echo 'Contenedor listo. Herramientas disponibles: Ruby, Node.js, Python, RPM' && tail -f /dev/null"
+
+  # Servicio opcional para pruebas
+  pruebas:
+    image: emilysofia/proyecto-fullstack:latest
+    container_name: ejecutor-pruebas
+    working_dir: /workspace
+    volumes:
+      - ./scripts:/workspace/scripts
+    command: >
+      /bin/bash -c "
+      echo 'Ejecutando validaciones...';
+      ruby -v;
+      node -v;
+      python3 --version;
+      echo 'Proyecto de Emily y Sofia - Todas las herramientas funcionan';
+      exit 0;
+      "
+    depends_on:
+      - fullstack
