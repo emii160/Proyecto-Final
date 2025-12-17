@@ -1,19 +1,10 @@
-version: "3.9"
+version: "3.8"
 
 services:
-  full:
-    image: emily06/alma8-full:proyecto-final
+  proyecto:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: alma8_revision
-    environment:
-      - RBENV_ROOT=/usr/local/rbenv
-      - NVM_DIR=/usr/local/nvm
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
-    command: tail -f /dev/null 
-    profiles:
-      - sonarqube
-      - jmeter
+    image: emily06/proyecto1:ci
+    container_name: proyecto-test
+    tty: true
